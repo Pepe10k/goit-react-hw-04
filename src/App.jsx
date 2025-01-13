@@ -1,35 +1,109 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useEffect } from 'react';
+import SearchBar from './components/SearchBar/SearchBar';
+import ImageGallery from './components/ImageGallery/ImageGallery';
+import Loader from './components/Loader/Loader';
+import ErrorMessage from './components/ErrorMessage/ErrorMessage';
+import LoadMoreBtn from './components/LoadMoreBtn/LoadMoreBtn';
+import { fetchImages } from './UnsplashAPI.js';
+import ImageModal from './components/ImageModal/ImageModal';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+const App = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalImage, setModalImage] = useState({ url: '', alt: '' });
+  const [totalPages, setTotalPages] = useState(0);
+  const [noImagesFound, setNoImagesFound] = useState(false);
+
+  useEffect(() => {
+    if (!searchQuery) return;
+
+    const getImages = async () => {
+      setIsLoading(true);
+      setError(null);
+      setNoImagesFound(false);
+
+      try {
+        const data = await fetchImages(searchQuery, page);
+        if (data.results.length === 0) {
+          setNoImagesFound(true);
+        }
+        setImages(prevImages => [...prevImages, ...data.results]);
+        setTotalPages(data.total_pages);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    getImages();
+  }, [searchQuery, page]);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      document.getElementById('root').setAttribute('inert', 'true');
+    } else {
+      document.getElementById('root').removeAttribute('inert');
+    }
+  }, [isModalOpen]);
+
+  const handleSearchSubmit = query => {
+    setSearchQuery(query);
+    setImages([]);
+    setPage(1);
+    setNoImagesFound(false);
+  };
+
+  const handleLoadMore = () => {
+    setPage(prevPage => prevPage + 1);
+
+    setTimeout(() => {
+      window.scrollBy({
+        top: 200,
+        behavior: 'smooth',
+      });
+    }, 300);
+  };
+
+  const openModal = (imageUrl, imageAlt) => {
+    setModalImage({ url: imageUrl, alt: imageAlt });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const hasMoreImages = page < totalPages;
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    <div className="App">
+      <SearchBar onSubmit={handleSearchSubmit} />
+      {error && <ErrorMessage message={error} />}
+      {noImagesFound && (
+        <p>No images found for {searchQuery}. Please try another search.</p>
+      )}
+      {images.length > 0 && (
+        <ImageGallery images={images} onImageClick={openModal} />
+      )}
+      {isLoading && <Loader />}
+      {images.length > 0 && !isLoading && hasMoreImages && (
+        <LoadMoreBtn onClick={handleLoadMore} isVisible={hasMoreImages} />
+      )}
 
-export default App
+      <ImageModal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        imageUrl={modalImage.url}
+        imageAlt={modalImage.alt}
+      />
+    </div>
+  );
+};
+
+export default App;
